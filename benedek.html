@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<title>Tökfaragás kerekek, Benedek</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Lilita+One&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="kerek.css">
+</head>
+<body>
+<div id="stage">
+  <div class="box" id="bigBox">
+    <h2>Nagy kerék <span class="price">-5000 Ft</span></h2>
+    <div class="ring" id="big"><div class="pin"></div><canvas id="bigC" width="800" height="800"></canvas></div>
+  </div>
+  <div class="box" id="smallBox">
+    <h2>Kis kerék <span class="price">-1000 Ft</span></h2>
+    <div class="ring" id="small"><div class="pin"></div><canvas id="smallC" width="800" height="800"></canvas></div>
+  </div>
+</div>
+
+<div id="result" role="status"></div>
+
+<div id="controls">
+  <button id="reset" class="reset">Reset</button>
+</div>
+
+<script>window.KEREK_OWNER = "benedek";</script>
+<script src="kerek.js"></script>
+</body>
+</html>
