@@ -16,7 +16,6 @@ const SMALL = [
   "Szünet 2 perc",
   "Szúrj bele random helyen",
   "Csak balkezes",
-  "Műanyag kés 1 percig",
   "Suttogva kell beszélned 2 percig",
   "Csak két szóval válaszolhatsz bármire 2 percig"
 ];
