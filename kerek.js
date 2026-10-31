@@ -129,13 +129,22 @@ function winnerIndex(rot, n){
 }
 
 /* Az eredmény annak a keréknek a közepén jelenik meg, amelyiket pörgették */
+function resEl(which){
+  let r = document.getElementById("res-" + which);
+  if(!r){ /* ha az HTML-ben nincs ilyen elem, létrehozzuk, hogy a pörgetés ettől ne akadjon el */
+    r = document.createElement("div");
+    r.className = "res"; r.id = "res-" + which; r.setAttribute("role","status");
+    document.getElementById(which).appendChild(r);
+  }
+  return r;
+}
 function showResult(which, text){
-  const r = document.getElementById("res-" + which);
+  const r = resEl(which);
   r.textContent = text;
   r.classList.add("on");
 }
 function hideResult(which){
-  (which ? [which] : ["big","small"]).forEach(w => document.getElementById("res-" + w).classList.remove("on"));
+  (which ? [which] : ["big","small"]).forEach(w => resEl(w).classList.remove("on"));
 }
 
 function setBusy(v){
