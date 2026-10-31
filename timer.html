@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="utf-8">
+<title>Tökfaragás időzítő</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  @font-face{font-family:"Monocraft";src:url("fonts/Monocraft.ttf") format("truetype");font-display:swap}
+  html,body{margin:0;height:100%;background:transparent;overflow:hidden;
+    font-family:"Monocraft","Courier New",monospace;color:#fff}
+  #view{height:100%;box-sizing:border-box;padding-bottom:170px;display:flex;flex-direction:column;
+    align-items:center;justify-content:center}
+  body.nc #view{padding-bottom:0}
+  #label{font-size:min(6vw,11vh);text-shadow:.1em .1em 0 #3f3f3f;min-height:1.2em;text-align:center}
+  #time{font-size:min(23vw,58vh);line-height:1.05;text-shadow:.07em .07em 0 #3f3f3f;white-space:nowrap}
+  body.paused #time{color:#ffff55}
+  body.low #time{color:#ff5555}
+  body.done #time{color:#ff5555;animation:blink 1s steps(1) infinite}
+  @keyframes blink{50%{opacity:.2}}
+
+  #controls{position:fixed;left:0;right:0;bottom:0;padding:10px 12px;background:rgba(0,0,0,.6);
+    display:flex;flex-direction:column;gap:8px;align-items:center;font-size:14px}
+  body.nc #controls{display:none}
+  .row{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;align-items:center}
+  button,input{font:inherit;font-size:14px;color:#fff;border-radius:0}
+  button{padding:7px 12px;cursor:pointer;background:#707070;border:3px solid;
+    border-color:#bdbdbd #3a3a3a #3a3a3a #bdbdbd;text-shadow:2px 2px 0 #3f3f3f}
+  button:hover{background:#7d8ac7}
+  button:focus-visible,input:focus-visible{outline:3px solid #ffff55;outline-offset:1px}
+  button.go{background:#3f8f2f}
+  button.go:hover{background:#55b341}
+  input{background:#111;border:3px solid;border-color:#3a3a3a #bdbdbd #bdbdbd #3a3a3a;padding:6px;text-align:center}
+  input[type=number]{width:56px}
+  input[type=text]{width:190px;text-align:left}
+</style>
+</head>
+<body>
+<div id="view">
+  <div id="label"></div>
+  <div id="time">05:00</div>
+</div>
+
+<div id="controls">
+  <div class="row">
+    <input id="inMin" type="number" min="0" max="999" value="5" aria-label="Perc">
+    <span>perc</span>
+    <input id="inSec" type="number" min="0" max="59" value="0" aria-label="Másodperc">
+    <span>mp</span>
+    <button id="setBtn">Beállít</button>
+    <input id="inLabel" type="text" placeholder="Felirat (nem kötelező)" maxlength="40" aria-label="Felirat">
+  </div>
+  <div class="row">
+    <button data-set="60">1 perc</button>
+    <button data-set="120">2 perc</button>
+    <button data-set="300">5 perc</button>
+    <button data-set="600">10 perc</button>
+    <button data-adj="-60">-1 perc</button>
+    <button data-adj="-10">-10 mp</button>
+    <button data-adj="10">+10 mp</button>
+    <button data-adj="60">+1 perc</button>
+  </div>
+  <div class="row">
+    <button id="toggleBtn" class="go">Start</button>
+    <button id="resetBtn">Reset</button>
+  </div>
+</div>
+
+<script>
+const KEY = "tokkerek_timer", HIDE_KEY = "tokkerek_timer_hide";
+const el = id => document.getElementById(id);
+const timeEl = el("time"), labelEl = el("label"), toggleBtn = el("toggleBtn");
+let st = { running:false, remaining:300000, endAt:0, total:300000, label:"" };
+
+try{
+  const v = JSON.parse(localStorage.getItem(KEY));
+  if(v && typeof v.remaining === "number") st = Object.assign(st, v);
+}catch(e){}
+const save = () => { try{ localStorage.setItem(KEY, JSON.stringify(st)); }catch(e){} };
+
+const left = () => st.running ? Math.max(0, st.endAt - Date.now()) : st.remaining;
+
+function fmt(ms){
+  const s = Math.ceil(ms/1000), m = Math.floor(s/60), r = s % 60;
+  return String(m).padStart(2,"0") + ":" + String(r).padStart(2,"0");
+}
+
+function render(){
+  let ms = left();
+  if(st.running && ms === 0){ st.running = false; st.remaining = 0; save(); }
+  timeEl.textContent = fmt(ms);
+  labelEl.textContent = st.label;
+  document.title = fmt(ms) + " | Tökfaragás időzítő";
+  const b = document.body.classList;
+  b.toggle("done", ms === 0);
+  b.toggle("low", ms > 0 && ms <= 10000);
+  b.toggle("paused", !st.running && ms > 0 && ms < st.total);
+  toggleBtn.textContent = st.running ? "Megállít" : "Start";
+}
+
+function setTime(sec){
+  st.total = st.remaining = Math.max(0, sec)*1000;
+  st.running = false;
+  const m = Math.floor(sec/60), s = sec % 60;
+  el("inMin").value = m; el("inSec").value = s;
+  save(); render();
+}
+function start(){
+  if(st.remaining <= 0) return;
+  st.endAt = Date.now() + st.remaining; st.running = true; save(); render();
+}
+function stop(){ st.remaining = left(); st.running = false; save(); render(); }
+function toggle(){ st.running ? stop() : start(); }
+function reset(){ st.remaining = st.total; st.running = false; save(); render(); }
+function adjust(sec){
+  const next = Math.max(0, left() + sec*1000);
+  if(st.running) st.endAt = Date.now() + next; else st.remaining = next;
+  st.total = Math.max(st.total, next);
+  save(); render();
+}
+
+el("setBtn").onclick = () => setTime((+el("inMin").value||0)*60 + (+el("inSec").value||0));
+["inMin","inSec"].forEach(id => el(id).addEventListener("keydown", e => { if(e.key === "Enter") el("setBtn").click(); }));
+el("inLabel").value = st.label;
+el("inLabel").oninput = e => { st.label = e.target.value; save(); render(); };
+toggleBtn.onclick = toggle;
+el("resetBtn").onclick = reset;
+document.querySelectorAll("[data-set]").forEach(b => b.onclick = () => setTime(+b.dataset.set));
+document.querySelectorAll("[data-adj]").forEach(b => b.onclick = () => adjust(+b.dataset.adj));
+document.addEventListener("click", e => { if(e.target.tagName === "BUTTON") e.target.blur(); });
+
+/* Billentyűk (OBS Interact ablak): Szóköz start/stop, R reset, H gombok elrejtése */
+function setHidden(h){
+  document.body.classList.toggle("nc", h);
+  try{ localStorage.setItem(HIDE_KEY, h ? "1" : "0"); }catch(e){}
+}
+addEventListener("keydown", e => {
+  if(e.target.tagName === "INPUT") return;
+  const k = e.key.toLowerCase();
+  if(k === " "){ e.preventDefault(); toggle(); }
+  else if(k === "r") reset();
+  else if(k === "h") setHidden(!document.body.classList.contains("nc"));
+});
+
+let hidden = false;
+try{ hidden = localStorage.getItem(HIDE_KEY) === "1"; }catch(e){}
+if(new URLSearchParams(location.search).get("controls") === "0") hidden = true;
+setHidden(hidden);
+
+el("inMin").value = Math.floor(st.total/60000);
+el("inSec").value = Math.round(st.total/1000) % 60;
+render();
+setInterval(render, 100);
+</script>
+</body>
+</html>

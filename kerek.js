@@ -27,10 +27,10 @@ const OWNER = window.KEREK_OWNER || "default";
 const KEY = "tokkerek_big_left_" + OWNER;
 let bigLeft = load();
 let bigRot = 0, smallRot = 0, busy = false, resultTimer = null;
+let active = null; /* az a kerék, amelyik éppen pörög vagy az eredményt mutatja */
 
 const bigC = document.getElementById("bigC");
 const smallC = document.getElementById("smallC");
-const resultEl = document.getElementById("result");
 const btns = ["reset"].map(id => document.getElementById(id));
 
 function load(){
@@ -56,6 +56,7 @@ function wrap(ctx, text, maxW){
   return lines;
 }
 
+const layoutCache = {};
 function draw(canvas, items, colors, rot){
   const ctx = canvas.getContext("2d");
   const S = canvas.width, C = S/2, R = C - 12;
@@ -86,14 +87,21 @@ function draw(canvas, items, colors, rot){
     ctx.textAlign = "right"; ctx.textBaseline = "middle";
     const maxW = R*0.68;
     const arcH = n === 1 ? R*0.9 : 2*R*0.6*Math.sin(Math.min(a/2, Math.PI/2));
-    let size = n <= 4 ? 52 : n <= 8 ? 40 : 34, lines;
-    for(;;){
-      ctx.font = size + "px 'Lilita One','Arial Black',sans-serif";
-      lines = wrap(ctx, items[i], maxW);
-      const fits = lines.length*size*1.08 <= arcH*0.92 && lines.every(l => ctx.measureText(l).width <= maxW + 1);
-      if(fits || size <= 14) break;
-      size--;
+    const ck = n + "|" + items[i];
+    let L = layoutCache[ck];
+    if(!L){
+      let sz = n <= 4 ? 52 : n <= 8 ? 40 : 34, ls;
+      for(;;){
+        ctx.font = sz + "px 'Lilita One','Arial Black',sans-serif";
+        ls = wrap(ctx, items[i], maxW);
+        const fits = ls.length*sz*1.08 <= arcH*0.92 && ls.every(l => ctx.measureText(l).width <= maxW + 1);
+        if(fits || sz <= 14) break;
+        sz--;
+      }
+      L = layoutCache[ck] = {size: sz, lines: ls};
     }
+    const size = L.size, lines = L.lines;
+    ctx.font = size + "px 'Lilita One','Arial Black',sans-serif";
     ctx.lineWidth = 6; ctx.strokeStyle = "rgba(29,10,36,.85)"; ctx.fillStyle = "#fff4e0";
     const lh = size*1.08, y0 = -((lines.length-1)*lh)/2;
     lines.forEach((l,k) => {
@@ -120,11 +128,15 @@ function winnerIndex(rot, n){
   return Math.floor(p/a) % n;
 }
 
-function showResult(label, text){
-  resultEl.innerHTML = "<small>" + label + "</small>" + text;
-  resultEl.classList.add("on");
+/* Az eredmény annak a keréknek a közepén jelenik meg, amelyiket pörgették */
+function showResult(which, text){
+  const r = document.getElementById("res-" + which);
+  r.textContent = text;
+  r.classList.add("on");
 }
-function hideResult(){ resultEl.classList.remove("on"); }
+function hideResult(which){
+  (which ? [which] : ["big","small"]).forEach(w => document.getElementById("res-" + w).classList.remove("on"));
+}
 
 function setBusy(v){
   busy = v;
@@ -134,10 +146,11 @@ function setBusy(v){
 function spin(which){
   if(busy) return;
   const items = which === "big" ? bigLeft : SMALL;
-  if(!items.length){ showResult("Nagy kerék", "Elfogyott, nyomj Resetet"); return; }
+  if(!items.length) return;
   clearTimeout(resultTimer);
-  hideResult();
+  hideResult(which);
   setBusy(true);
+  active = which;
   const start = which === "big" ? bigRot : smallRot;
   const target = start + (6 + Math.random()*3)*Math.PI*2 + Math.random()*Math.PI*2;
   const dur = 5500, t0 = performance.now();
@@ -145,7 +158,6 @@ function spin(which){
     const t = Math.min(1, (now - t0)/dur);
     const rot = start + (target - start)*(1 - Math.pow(1 - t, 3));
     if(which === "big") bigRot = rot; else smallRot = rot;
-    redraw();
     if(t < 1){ requestAnimationFrame(frame); return; }
     finish(which, items[winnerIndex(rot, items.length)]);
   })(t0);
@@ -153,16 +165,17 @@ function spin(which){
 
 function finish(which, winner){
   if(which === "small"){
-    showResult("Kis kerék", winner);
+    showResult("small", winner);
+    active = null;
     setBusy(false);
     return;
   }
-  showResult("Nagy kerék", winner);
+  showResult("big", winner);
   resultTimer = setTimeout(() => {
     const i = bigLeft.indexOf(winner);
     if(i > -1) bigLeft.splice(i, 1);
     save();
-    redraw();
+    active = null;
     setBusy(false);
   }, 2800);
 }
@@ -172,6 +185,7 @@ function reset(){
   bigLeft = BIG_ALL.slice();
   save();
   bigRot = 0; smallRot = 0;
+  active = null;
   hideResult();
   setBusy(false);
   redraw();
@@ -191,5 +205,18 @@ addEventListener("keydown", e => {
   else if(k === "h") document.getElementById("controls").classList.toggle("off");
 });
 
-redraw();
-if(document.fonts && document.fonts.ready) document.fonts.ready.then(redraw);
+/* Idle forgás: lassan forog, ha nem pörgeted. A kis kerék ellenkező irányba. */
+const IDLE_BIG = 0.12, IDLE_SMALL = -0.16; /* radián / másodperc */
+let lastT = performance.now();
+function idle(now){
+  const dt = Math.min(0.1, (now - lastT)/1000);
+  lastT = now;
+  if(active !== "big") bigRot += IDLE_BIG*dt;
+  if(active !== "small") smallRot += IDLE_SMALL*dt;
+  redraw();
+  requestAnimationFrame(idle);
+}
+requestAnimationFrame(idle);
+if(document.fonts && document.fonts.ready) document.fonts.ready.then(() => {
+  for(const k in layoutCache) delete layoutCache[k];
+});
